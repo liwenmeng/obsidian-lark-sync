@@ -1,90 +1,145 @@
-# Obsidian Sample Plugin
+# Lark Sync
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Sync documents from your [Feishu (Lark)](https://www.feishu.cn) cloud drive into your Obsidian vault. Supports incremental updates, image attachments, and both new (`docx`) and legacy (`doc`) document formats.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+> **Desktop only.** This plugin uses a local OAuth callback server and requires the Obsidian desktop app.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+---
 
-## First time developing plugins?
+## Features
 
-Quick starting guide for new plugin devs:
+- **One-click sync** — ribbon icon or command palette entry triggers a full sync
+- **Incremental updates** — only documents modified since the last sync are downloaded
+- **Image attachments** — embedded images are downloaded and stored as local files with Obsidian wiki-links
+- **Both document formats** — native `docx` blocks API and legacy `doc` export API are both supported
+- **Real-time progress** — the notification shows `Syncing… 12/180 · est. 8 min remaining` while syncing
+- **Error log** — failed documents are saved to `sync-errors.json` in the plugin folder for easy inspection
+- **Feishu OAuth** — authenticates with your personal Feishu account via OAuth 2.0; no password is ever stored
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+---
 
-## Releasing new releases
+## Prerequisites
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+Before installing the plugin you need a Feishu custom app with the correct permissions.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+### 1. Create a Feishu app
 
-## Adding your plugin to the community plugin list
+1. Go to [Feishu Open Platform](https://open.feishu.cn/) and log in.
+2. Click **Create App** → choose **Custom App**.
+3. In **Permissions & Scopes**, enable at minimum:
+   - `docs:doc:readonly`
+   - `docx:document:readonly`
+   - `drive:drive:readonly`
+   - `drive:file:readonly`
+   - `drive:export:readonly`
+4. In **Security Settings → Redirect URLs**, add exactly:
+   ```
+   http://localhost:8080/callback
+   ```
+5. Publish the app (it only needs to be available to yourself).
+6. Copy the **App ID** and **App Secret** from **Credentials & Basic Info**.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+---
 
-## How to use
+## Installation
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+The plugin is not yet in the Obsidian community plugin list. Install it manually:
 
-## Manually installing the plugin
+1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/liwenmeng/obsidian-lark-sync/releases).
+2. Create the folder `<your-vault>/.obsidian/plugins/obsidian-lark-sync/`.
+3. Copy both files into that folder.
+4. In Obsidian, go to **Settings → Community Plugins**, disable Safe Mode, and enable **Lark Sync**.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+---
 
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
+## Configuration
 
-## Funding URL
+Open **Settings → Lark Sync**.
 
-You can include funding URLs where people who use your plugin can financially support it.
+| Field | Description |
+|---|---|
+| **App ID** | The App ID from your Feishu custom app. |
+| **App Secret** | The App Secret from your Feishu custom app. |
+| **Feishu Folder URL** | Paste the full URL of the Feishu folder you want to sync, e.g. `https://xxx.feishu.cn/drive/folder/fldcnXXXXX`. The folder token is extracted automatically. |
+| **Local Sync Path** | The folder inside your vault where documents will be saved (default: `Lark`). |
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+### Authorize your Feishu account
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+After filling in the credentials, click **Authorize Feishu Account**. Your browser will open the Feishu OAuth page. Log in and approve the permissions. Once the browser shows the success message, return to Obsidian — the plugin stores your access token automatically.
+
+Authorization lasts approximately 2 hours. The plugin refreshes it silently when it is about to expire.
+
+---
+
+## Usage
+
+### Sync now
+
+- Click the **↻** ribbon icon on the left sidebar, **or**
+- Open the command palette (`Ctrl/Cmd + P`) and run **Lark Sync: Sync now**, **or**
+- Open **Settings → Lark Sync** and click the **Sync Now** button.
+
+The notification in the top-right corner shows live progress. When finished, a summary appears:
+
+```
+Sync complete ✓  Updated 5 · Skipped 174 · Failed 0
 ```
 
-If you have multiple URLs, you can also do:
+### File layout
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+Documents are saved under your configured sync path, mirroring the folder structure in Feishu:
+
+```
+Lark/
+├── Project Alpha/
+│   ├── Meeting Notes.md
+│   └── Spec.md
+└── Personal/
+    └── Reading List.md
 ```
 
-## API Documentation
+Images are saved to `<sync-path>/attachments/<document-name>/` and referenced with Obsidian wiki-links.
 
-See https://docs.obsidian.md
+Each file includes YAML front matter with the Feishu token and modification time so the plugin can detect changes without re-downloading unchanged documents.
+
+---
+
+## FAQ
+
+**Q: Can I sync only a subfolder?**  
+Paste the URL of that subfolder in the **Feishu Folder URL** field. The plugin syncs the entire subtree under whatever folder you point it at.
+
+**Q: Will my existing notes be overwritten?**  
+Only files that were previously synced by this plugin (identified by the `feishu_token` front matter field) are updated. Unrelated notes in the same vault are never touched.
+
+**Q: My sync shows failures. How do I see the details?**  
+After any sync with failures, a `sync-errors.json` file is written to `.obsidian/plugins/obsidian-lark-sync/`. Open it to see the document name, token, and error message for each failure.
+
+**Q: Does the plugin work on mobile?**  
+No. The OAuth flow requires a local HTTP server (`http://localhost:8080/callback`) which is only available on the desktop app.
+
+**Q: The authorization expired and sync fails. What do I do?**  
+Go to **Settings → Lark Sync** and click **Authorize Feishu Account** again to get a fresh token.
+
+**Q: Can I use this with a Lark (non-Chinese) account?**  
+Yes. Feishu and Lark share the same Open Platform API. The plugin works with both.
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/liwenmeng/obsidian-lark-sync.git
+cd obsidian-lark-sync
+npm install
+npm run dev          # watch mode
+npm run build        # production build
+```
+
+Copy `main.js` and `manifest.json` to your vault's plugin folder to test.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
