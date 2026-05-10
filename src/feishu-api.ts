@@ -39,6 +39,8 @@ export interface DocEntry {
 	name: string;
 	type: 'docx' | 'doc';
 	path: string;
+	/** Folder path within the root, without trailing slash, never includes the doc name. */
+	folderPath: string;
 	modifiedTime: string;
 }
 
@@ -277,7 +279,7 @@ export class FeishuApi {
 			if (f.type === 'folder') {
 				await this.traverseFolder(f.token, itemPath, docs);
 			} else if (f.type === 'docx' || f.type === 'doc') {
-				docs.push({ token: f.token, name: f.name, type: f.type, path: itemPath, modifiedTime: f.modified_time });
+				docs.push({ token: f.token, name: f.name, type: f.type, path: itemPath, folderPath: pathPrefix, modifiedTime: f.modified_time });
 			}
 		}
 	}

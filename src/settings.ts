@@ -5,7 +5,9 @@ export interface LarkSyncSettings {
 	appId: string;
 	appSecret: string;
 	folderToken: string;
+	folderUrl: string;   // raw URL the user pasted; token is extracted from it
 	syncPath: string;
+	lastSyncTime: string; // ISO timestamp of last successful sync
 	// OAuth user tokens (persisted)
 	userToken: string;
 	refreshToken: string;
@@ -16,7 +18,9 @@ export const DEFAULT_SETTINGS: LarkSyncSettings = {
 	appId: '',
 	appSecret: '',
 	folderToken: '',
+	folderUrl: '',
 	syncPath: 'Lark',
+	lastSyncTime: '',
 	userToken: '',
 	refreshToken: '',
 	tokenExpiry: 0,
@@ -65,14 +69,16 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('文件夹 Token')
-			.setDesc('要同步的飞书云文档文件夹 token（从文件夹 URL 路径中获取，如 fldcnxxxxxx）')
+			.setName('飞书文件夹链接')
+			.setDesc('请粘贴飞书文件夹的 URL，例如 https://xxx.feishu.cn/drive/folder/fldcnxxxxx')
 			.addText(text => text
-				.setPlaceholder('fldcnxxxxxxxxxxxxxxxx')
-				.setValue(this.plugin.settings.folderToken)
+				.setPlaceholder('https://xxx.feishu.cn/drive/folder/fldcnxxxxx')
+				.setValue(resolveDisplayUrl(this.plugin.settings.folderUrl, this.plugin.settings.folderToken))
 				.onChange(async (value) => {
-					this.plugin.settings.folderToken = value.trim();
-					this.plugin.syncer.updateConfig(this.plugin.settings.syncPath, value.trim());
+					const token = extractFolderToken(value);
+					this.plugin.settings.folderUrl = value;
+					this.plugin.settings.folderToken = token;
+					this.plugin.syncer.updateConfig(this.plugin.settings.syncPath, token);
 					await this.plugin.saveSettings();
 				}));
 
@@ -94,7 +100,7 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 		containerEl.createEl('h3', { text: '飞书账号授权' });
 
 		const authStatus = this.plugin.api.isAuthorized
-			? `✓ 已授权（token 有效期至 ${new Date(this.plugin.settings.tokenExpiry).toLocaleString()}）`
+			? `✓ 已授权（授权有效期至 ${new Date(this.plugin.settings.tokenExpiry).toLocaleString()}）`
 			: '✗ 未授权';
 
 		new Setting(containerEl)
@@ -122,11 +128,11 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 
 		// ── Test & sync ───────────────────────────────────────────────────────
 
-		containerEl.createEl('h3', { text: '测试' });
+		containerEl.createEl('h3', { text: '测试与同步' });
 
 		new Setting(containerEl)
 			.setName('测试连接')
-			.setDesc('验证授权和文件夹 token 是否正确，列出可访问的文档数量')
+			.setDesc('验证授权和文件夹链接是否正确，列出可访问的文档数量')
 			.addButton(btn => {
 				btn.setButtonText('立即测试').setCta();
 				btn.onClick(async () => {
@@ -141,5 +147,56 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 					}
 				});
 			});
+
+		const lastSync = this.plugin.settings.lastSyncTime;
+		const lastSyncDesc = lastSync
+			? `上次同步：${formatDateTime(lastSync)}`
+			: '从未同步';
+
+		new Setting(containerEl)
+			.setName('立即同步')
+			.setDesc(lastSyncDesc)
+			.addButton(btn => {
+				btn.setButtonText('立即同步').setCta();
+				btn.onClick(async () => {
+					btn.setButtonText('同步中…').setDisabled(true);
+					try {
+						await this.plugin.runSync();
+					} finally {
+						btn.setButtonText('立即同步').setDisabled(false);
+						// Refresh to show updated last-sync time
+						this.display();
+					}
+				});
+			});
 	}
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Reconstruct a displayable URL from a bare token for backward compatibility. */
+function resolveDisplayUrl(folderUrl: string, folderToken: string): string {
+	if (folderUrl) return folderUrl;
+	if (folderToken) return `https://feishu.cn/drive/folder/${folderToken}`;
+	return '';
+}
+
+/** Extract the folder token from a Feishu folder URL or return the input as-is. */
+function extractFolderToken(input: string): string {
+	const trimmed = input.trim();
+	try {
+		const url = new URL(trimmed);
+		const parts = url.pathname.split('/').filter(Boolean);
+		const last = parts[parts.length - 1];
+		if (last) return last;
+	} catch {
+		// Not a URL — treat the raw value as the token
+	}
+	return trimmed;
+}
+
+function formatDateTime(iso: string): string {
+	const d = new Date(iso);
+	const p = (n: number) => String(n).padStart(2, '0');
+	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }

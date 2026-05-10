@@ -8,11 +8,29 @@ import {
 	type SyncRecord,
 } from './sync-record';
 
+export interface SyncError {
+	name: string;
+	token: string;
+	type: string;
+	error: string;
+}
+
 export interface SyncResult {
 	synced: number;
 	skipped: number;
 	failed: number;
+	errors: SyncError[];
 }
+
+export interface SyncProgress {
+	current: number;  // docs processed so far (all types)
+	total: number;
+	synced: number;   // successfully synced (made network calls)
+	failed: number;   // failed (made network calls)
+	elapsed: number;  // ms since sync started
+}
+
+export type SyncProgressCallback = (p: SyncProgress) => void;
 
 export class LarkSyncer {
 	private api: FeishuApi;
@@ -41,7 +59,7 @@ export class LarkSyncer {
 		return docs.length;
 	}
 
-	async sync(): Promise<SyncResult> {
+	async sync(onProgress?: SyncProgressCallback): Promise<SyncResult> {
 		if (!this.folderToken) throw new Error('请先在设置中填写文件夹 Token');
 		if (!this.api.isAuthorized) throw new Error('请先点击"授权飞书账号"完成 OAuth 授权');
 
@@ -49,33 +67,54 @@ export class LarkSyncer {
 
 		new Notice('正在获取飞书文档列表…');
 		const docs = await this.api.getAllDocs(this.folderToken);
-		new Notice(`发现 ${docs.length} 个文档，开始同步…`);
 
 		let synced = 0, skipped = 0, failed = 0;
+		const errors: SyncError[] = [];
+		const startTime = Date.now();
 
-		for (const doc of docs) {
+		for (let i = 0; i < docs.length; i++) {
+			const doc = docs[i]!;
 			if (!needsSync(doc.token, doc.modifiedTime, record)) {
 				skipped++;
-				continue;
+			} else {
+				try {
+					await this.syncOne(doc, record);
+					synced++;
+					await saveSyncRecord(this.pluginDir, this.vault, record);
+				} catch (e) {
+					failed++;
+					const errMsg = e instanceof Error ? e.message : String(e);
+					errors.push({ name: doc.name, token: doc.token, type: doc.type, error: errMsg });
+					console.error(`[LarkSync] 同步失败 "${doc.name}" (${doc.token}):`, e);
+				}
 			}
-			try {
-				await this.syncOne(doc, record);
-				synced++;
-			} catch (e) {
-				failed++;
-				console.error(`[LarkSync] 同步失败 "${doc.name}":`, e);
-			}
+			onProgress?.({ current: i + 1, total: docs.length, synced, failed, elapsed: Date.now() - startTime });
 		}
 
 		await saveSyncRecord(this.pluginDir, this.vault, record);
-		return { synced, skipped, failed };
+
+		// Write error log so failures can be inspected without DevTools
+		if (errors.length > 0) {
+			const logPath = `${this.pluginDir}/sync-errors.json`;
+			await this.vault.adapter.write(
+				logPath,
+				JSON.stringify({ timestamp: new Date().toISOString(), errors }, null, 2),
+			);
+		}
+
+		return { synced, skipped, failed, errors };
 	}
 
 	private async syncOne(doc: DocEntry, record: SyncRecord): Promise<void> {
-		const safeName = toSafeName(doc.name);
-		const pathParts = doc.path.split('/').map(toSafeName);
-		const folderPath = [this.syncPath, ...pathParts.slice(0, -1)].join('/');
-		const filePath = `${this.syncPath}/${pathParts.join('/')}.md`;
+		// Use token as filename fallback when name is empty or becomes empty after sanitisation
+		const safeName = toSafeName(doc.name) || doc.token;
+		const folderParts = doc.folderPath
+			? doc.folderPath.split('/').filter(Boolean).map(toSafeName)
+			: [];
+		const folderPath = [this.syncPath, ...folderParts].join('/');
+		const filePath = folderParts.length > 0
+			? `${this.syncPath}/${folderParts.join('/')}/${safeName}.md`
+			: `${this.syncPath}/${safeName}.md`;
 
 		let markdown: string;
 		if (doc.type === 'docx') {
