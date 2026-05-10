@@ -7,7 +7,6 @@ import {
 	markSynced, needsSync, toSafeName,
 	type SyncRecord,
 } from './sync-record';
-import type { LarkSyncSettings } from './settings';
 
 export interface SyncResult {
 	synced: number;
@@ -16,46 +15,40 @@ export interface SyncResult {
 }
 
 export class LarkSyncer {
-	private settings: LarkSyncSettings;
+	private api: FeishuApi;
 	private vault: Vault;
 	private pluginDir: string;
+	private syncPath: string;
+	private folderToken: string;
 
-	constructor(settings: LarkSyncSettings, vault: Vault, pluginDir: string) {
-		this.settings = settings;
+	constructor(api: FeishuApi, vault: Vault, pluginDir: string, syncPath: string, folderToken: string) {
+		this.api = api;
 		this.vault = vault;
 		this.pluginDir = pluginDir;
+		this.syncPath = syncPath;
+		this.folderToken = folderToken;
 	}
 
-	updateSettings(settings: LarkSyncSettings): void {
-		this.settings = settings;
-	}
-
-	private getApi(): FeishuApi {
-		return new FeishuApi(this.settings.appId, this.settings.appSecret);
+	updateConfig(syncPath: string, folderToken: string): void {
+		this.syncPath = syncPath;
+		this.folderToken = folderToken;
 	}
 
 	async testConnection(): Promise<number> {
-		const { appId, appSecret, folderToken } = this.settings;
-		if (!appId || !appSecret || !folderToken) {
-			throw new Error('请先填写 App ID、App Secret 和文件夹 Token');
-		}
-		const api = this.getApi();
-		await api.getToken();
-		const docs = await api.getAllDocs(folderToken);
+		if (!this.folderToken) throw new Error('请先填写文件夹 Token');
+		if (!this.api.isAuthorized) throw new Error('请先点击"授权飞书账号"完成授权');
+		const docs = await this.api.getAllDocs(this.folderToken);
 		return docs.length;
 	}
 
 	async sync(): Promise<SyncResult> {
-		const { appId, appSecret, folderToken } = this.settings;
-		if (!appId || !appSecret || !folderToken) {
-			throw new Error('请先在设置中填写飞书 App ID、App Secret 和文件夹 Token');
-		}
+		if (!this.folderToken) throw new Error('请先在设置中填写文件夹 Token');
+		if (!this.api.isAuthorized) throw new Error('请先点击"授权飞书账号"完成 OAuth 授权');
 
-		const api = this.getApi();
 		const record = await loadSyncRecord(this.pluginDir, this.vault);
 
 		new Notice('正在获取飞书文档列表…');
-		const docs = await api.getAllDocs(folderToken);
+		const docs = await this.api.getAllDocs(this.folderToken);
 		new Notice(`发现 ${docs.length} 个文档，开始同步…`);
 
 		let synced = 0, skipped = 0, failed = 0;
@@ -66,7 +59,7 @@ export class LarkSyncer {
 				continue;
 			}
 			try {
-				await this.syncOne(doc, api, record);
+				await this.syncOne(doc, record);
 				synced++;
 			} catch (e) {
 				failed++;
@@ -78,22 +71,21 @@ export class LarkSyncer {
 		return { synced, skipped, failed };
 	}
 
-	private async syncOne(doc: DocEntry, api: FeishuApi, record: SyncRecord): Promise<void> {
+	private async syncOne(doc: DocEntry, record: SyncRecord): Promise<void> {
 		const safeName = toSafeName(doc.name);
 		const pathParts = doc.path.split('/').map(toSafeName);
-		const folderPath = [this.settings.syncPath, ...pathParts.slice(0, -1)].join('/');
-		const filePath = `${this.settings.syncPath}/${pathParts.join('/')}.md`;
+		const folderPath = [this.syncPath, ...pathParts.slice(0, -1)].join('/');
+		const filePath = `${this.syncPath}/${pathParts.join('/')}.md`;
 
 		let markdown: string;
 		if (doc.type === 'docx') {
-			const blocks = await api.getDocBlocks(doc.token);
+			const blocks = await this.api.getDocBlocks(doc.token);
 			markdown = blocksToMarkdown(blocks);
-			markdown = await this.processImages(markdown, safeName, api);
+			markdown = await this.processImages(markdown, safeName);
 		} else {
-			// Old doccn format: export → download → parse
-			const ticket = await api.createExportTask(doc.token);
-			const fileToken = await api.pollExportTask(ticket, doc.token);
-			const buf = await api.downloadBinary(`/drive/v1/export_tasks/file/${fileToken}/download`);
+			const ticket = await this.api.createExportTask(doc.token);
+			const fileToken = await this.api.pollExportTask(ticket, doc.token);
+			const buf = await this.api.downloadBinary(`/drive/v1/export_tasks/file/${fileToken}/download`);
 			markdown = await docxToMarkdown(buf);
 		}
 
@@ -111,22 +103,20 @@ export class LarkSyncer {
 		await this.ensureFolderExists(folderPath);
 		await this.writeFile(filePath, frontmatter + markdown);
 
-		markSynced(doc.token, {
-			name: doc.name, safeName, path: doc.path, modifiedTime: doc.modifiedTime,
-		}, record);
+		markSynced(doc.token, { name: doc.name, safeName, path: doc.path, modifiedTime: doc.modifiedTime }, record);
 	}
 
-	private async processImages(markdown: string, docSafeName: string, api: FeishuApi): Promise<string> {
+	private async processImages(markdown: string, docSafeName: string): Promise<string> {
 		const tokens = extractImageTokens(markdown);
 		if (!tokens.length) return markdown;
 
 		const replacements = new Map<string, string>();
-		const attachDir = `${this.settings.syncPath}/attachments/${docSafeName}`;
+		const attachDir = `${this.syncPath}/attachments/${docSafeName}`;
 		await this.ensureFolderExists(attachDir);
 
 		for (const token of tokens) {
 			try {
-				const { data, ext } = await api.downloadMedia(token);
+				const { data, ext } = await this.api.downloadMedia(token);
 				const filename = `${token}${ext}`;
 				await this.vault.adapter.writeBinary(`${attachDir}/${filename}`, data);
 				replacements.set(token, `![[attachments/${docSafeName}/${filename}]]`);

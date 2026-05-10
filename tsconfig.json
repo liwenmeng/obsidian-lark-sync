@@ -21,8 +21,11 @@
 			"DOM",
 			"ES5",
 			"ES6",
-			"ES7"
-		]
+			"ES7",
+			"ES2017",
+			"ES2019"
+		],
+		"types": ["node"]
 	},
 	"include": [
 		"src/**/*.ts"
