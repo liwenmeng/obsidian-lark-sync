@@ -382,8 +382,11 @@ function waitForCallback(port: number): Promise<string> {
 			}
 		});
 
-		server.listen(port, '127.0.0.1', () => {
-			console.log(`[LarkSync] OAuth 回调服务器监听 http://127.0.0.1:${port}/callback`);
+		// Listen without explicit host so Node.js binds dual-stack (:: on macOS/Linux,
+		// 0.0.0.0 on Windows), accepting both 127.0.0.1 and ::1 — necessary because
+		// macOS resolves 'localhost' to ::1 (IPv6) which would miss an IPv4-only bind.
+		server.listen(port, () => {
+			console.log(`[LarkSync] OAuth 回调服务器监听 http://localhost:${port}/callback`);
 		});
 
 		server.on('error', (e: Error) => {
