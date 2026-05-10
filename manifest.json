@@ -1,9 +1,9 @@
 {
-	"id": "obsidian-lark-sync",
+	"id": "lark-sync",
 	"name": "Lark Sync",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"minAppVersion": "1.4.0",
-	"description": "Sync documents from Feishu (Lark) cloud drive into your Obsidian vault, with incremental updates and image attachment support.",
+	"description": "Sync documents from Feishu (Lark) cloud drive into your vault.",
 	"author": "linya",
 	"authorUrl": "https://github.com/liwenmeng",
 	"isDesktopOnly": true
