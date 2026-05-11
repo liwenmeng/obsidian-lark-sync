@@ -37,15 +37,15 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl('h2', { text: '飞书同步设置' });
+		new Setting(containerEl).setName("飞书同步设置").setHeading();
 
 		// ── App credentials ──────────────────────────────────────────────────
 
 		new Setting(containerEl)
 			.setName('App ID')
-			.setDesc('飞书应用的 App ID（开放平台 → 凭证与基础信息）')
+			.setDesc('飞书应用的 app ID（开放平台 → 凭证与基础信息）')
 			.addText(text => text
-				.setPlaceholder('cli_xxxxxxxxxxxxxxxx')
+				.setPlaceholder('CLI_xxxxxxxxxxxxxxxx')
 				.setValue(this.plugin.settings.appId)
 				.onChange(async (value) => {
 					this.plugin.settings.appId = value.trim();
@@ -54,12 +54,12 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('App Secret')
-			.setDesc('飞书应用的 App Secret')
+			.setName('App secret')
+			.setDesc('飞书应用的 app secret')
 			.addText(text => {
 				text.inputEl.type = 'password';
 				return text
-					.setPlaceholder('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+					.setPlaceholder('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
 					.setValue(this.plugin.settings.appSecret)
 					.onChange(async (value) => {
 						this.plugin.settings.appSecret = value.trim();
@@ -97,7 +97,7 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 
 		// ── OAuth authorization ───────────────────────────────────────────────
 
-		containerEl.createEl('h3', { text: '飞书账号授权' });
+		new Setting(containerEl).setName("飞书账号授权").setHeading();
 
 		const authStatus = this.plugin.api.isAuthorized
 			? `✓ 已授权（授权有效期至 ${new Date(this.plugin.settings.tokenExpiry).toLocaleString()}）`
@@ -109,7 +109,7 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('授权飞书账号')
-			.setDesc('点击后会打开浏览器完成飞书 OAuth 授权，授权成功后回到 Obsidian 即可。redirect URI 需在飞书应用里配置为 http://localhost:8080/callback')
+			.setDesc('点击后会打开浏览器完成飞书账号授权，授权成功后回到 Obsidian 即可。需提前在飞书应用里将 redirect URL 配置为 localhost:8080/callback')
 			.addButton(btn => {
 				btn.setButtonText('授权飞书账号').setCta();
 				btn.onClick(async () => {
@@ -128,7 +128,7 @@ export class LarkSyncSettingTab extends PluginSettingTab {
 
 		// ── Test & sync ───────────────────────────────────────────────────────
 
-		containerEl.createEl('h3', { text: '测试与同步' });
+		new Setting(containerEl).setName("测试与同步").setHeading();
 
 		new Setting(containerEl)
 			.setName('测试连接')

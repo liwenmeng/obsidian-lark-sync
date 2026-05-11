@@ -342,7 +342,7 @@ export class FeishuApi {
 			method: 'GET',
 			headers: { Authorization: `Bearer ${token}` },
 		});
-		const ct = (res.headers['content-type'] ?? res.headers['Content-Type'] ?? '') as string;
+		const ct = (res.headers['content-type'] ?? res.headers['Content-Type'] ?? '');
 		return { data: res.arrayBuffer, ext: mimeToExt(ct) };
 	}
 }
@@ -351,14 +351,14 @@ export class FeishuApi {
 
 function openInBrowser(url: string): void {
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const electron = (require as (m: string) => any)('electron') as {
-			shell: { openExternal: (u: string) => void };
-		};
-		electron.shell.openExternal(url);
-	} catch {
-		window.open(url, '_blank');
-	}
+		type ElectronModule = { shell: { openExternal: (u: string) => void } };
+		const winReq = (window as { require?: (mod: string) => ElectronModule }).require;
+		if (winReq) {
+			winReq('electron').shell.openExternal(url);
+			return;
+		}
+	} catch { /* Electron module unavailable */ }
+	window.open(url, '_blank');
 }
 
 function waitForCallback(port: number): Promise<string> {
@@ -386,7 +386,7 @@ function waitForCallback(port: number): Promise<string> {
 		// 0.0.0.0 on Windows), accepting both 127.0.0.1 and ::1 — necessary because
 		// macOS resolves 'localhost' to ::1 (IPv6) which would miss an IPv4-only bind.
 		server.listen(port, () => {
-			console.log(`[LarkSync] OAuth 回调服务器监听 http://localhost:${port}/callback`);
+			console.debug(`[LarkSync] OAuth 回调服务器监听 http://localhost:${port}/callback`);
 		});
 
 		server.on('error', (e: Error) => {

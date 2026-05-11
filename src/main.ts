@@ -47,7 +47,7 @@ export default class LarkSyncPlugin extends Plugin {
 		this.addRibbonIcon('refresh-cw', '立即同步飞书文档', () => this.runSync());
 
 		this.addCommand({
-			id: 'lark-sync-now',
+			id: 'sync-now',
 			name: '立即同步飞书文档',
 			callback: () => this.runSync(),
 		});
